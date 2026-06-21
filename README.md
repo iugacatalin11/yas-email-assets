@@ -1,0 +1,1 @@
+# YAS Beauty email assets
