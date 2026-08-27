@@ -43,31 +43,70 @@ function buildSignature(name, title, phoneDisplay, phoneTel, email) {
   '</td></tr></table>';
 }
 
-function insertSignature(event) {
-  var email = (Office.context.mailbox.userProfile.emailAddress || "").toLowerCase();
-  var displayName = Office.context.mailbox.userProfile.displayName || "";
-
-  var apply = function (user) {
-    var name = (user && user.name) || displayName;
-    var title = (user && user.title) || "";
-    var pd = (user && user.phoneDisplay) || SHARED.phoneDisplay;
-    var pt = (user && user.phoneTel) || SHARED.phoneTel;
-    var html = buildSignature(name, title, pd, pt, email);
-    Office.context.mailbox.item.body.setSignatureAsync(
-      html,
-      { coercionType: Office.CoercionType.Html },
-      function () { event.completed(); }
-    );
-  };
-
-  // Ia datele utilizatorului din users.json (nume + functie per email).
-  fetch(USERS_URL, { cache: "no-store" })
-    .then(function (r) { return r.json(); })
-    .then(function (users) { apply(users[email]); })
-    .catch(function () { apply(null); }); // fallback: doar nume din profil
+// users.json cu timeout: daca nu raspunde in 4s, mergem pe fallback (profilul Office)
+function fetchUsers(timeoutMs) {
+  return new Promise(function (resolve) {
+    var done = false;
+    var finish = function (val) { if (!done) { done = true; resolve(val); } };
+    setTimeout(function () { finish(null); }, timeoutMs);
+    try {
+      fetch(USERS_URL, { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (users) { finish(users); })
+        .catch(function () { finish(null); });
+    } catch (e) {
+      finish(null);
+    }
+  });
 }
 
-Office.onReady(function () {});
-if (typeof Office !== "undefined" && Office.actions && Office.actions.associate) {
-  Office.actions.associate("insertSignature", insertSignature);
+function insertSignature(event) {
+  var completed = false;
+  var finish = function () {
+    if (completed) { return; }
+    completed = true;
+    try { event.completed(); } catch (e) { /* nimic */ }
+  };
+  try {
+    var profile = (Office.context && Office.context.mailbox && Office.context.mailbox.userProfile) || {};
+    var email = (profile.emailAddress || "").toLowerCase();
+    var displayName = profile.displayName || "";
+
+    fetchUsers(4000).then(function (users) {
+      try {
+        var user = users && users[email];
+        var name = (user && user.name) || displayName;
+        var title = (user && user.title) || "";
+        var pd = (user && user.phoneDisplay) || SHARED.phoneDisplay;
+        var pt = (user && user.phoneTel) || SHARED.phoneTel;
+        var html = buildSignature(name, title, pd, pt, email);
+        Office.context.mailbox.item.body.setSignatureAsync(
+          html,
+          { coercionType: Office.CoercionType.Html },
+          function () { finish(); }
+        );
+        // plasa de siguranta: daca setSignatureAsync nu mai revine, inchidem evenimentul
+        setTimeout(finish, 8000);
+      } catch (e) {
+        finish();
+      }
+    });
+  } catch (e) {
+    finish();
+  }
+}
+
+// Inregistrarea handler-ului: imediat daca Office e gata, altfel la onReady.
+function registerHandler() {
+  try {
+    if (typeof Office !== "undefined" && Office.actions && Office.actions.associate) {
+      Office.actions.associate("insertSignature", insertSignature);
+      return true;
+    }
+  } catch (e) { /* nimic */ }
+  return false;
+}
+
+if (!registerHandler() && typeof Office !== "undefined" && Office.onReady) {
+  Office.onReady(function () { registerHandler(); });
 }
