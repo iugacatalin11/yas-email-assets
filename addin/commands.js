@@ -96,7 +96,10 @@ function insertSignature(event) {
   }
 }
 
-// Inregistrarea handler-ului: imediat daca Office e gata, altfel la onReady.
+// Inregistrarea handler-ului si handshake-ul obligatoriu cu office.js.
+// Office.initialize / Office.onReady TREBUIE apelate sincron la incarcarea
+// scriptului, altfel office.js arunca "Office.js has not fully loaded" si
+// handler-ul nu mai e apelat niciodata.
 function registerHandler() {
   try {
     if (typeof Office !== "undefined" && Office.actions && Office.actions.associate) {
@@ -107,6 +110,10 @@ function registerHandler() {
   return false;
 }
 
-if (!registerHandler() && typeof Office !== "undefined" && Office.onReady) {
-  Office.onReady(function () { registerHandler(); });
+if (typeof Office !== "undefined") {
+  Office.initialize = function () {};
+  registerHandler();
+  if (Office.onReady) {
+    Office.onReady(function () { registerHandler(); });
+  }
 }
