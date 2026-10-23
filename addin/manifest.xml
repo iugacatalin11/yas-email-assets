@@ -1,0 +1,88 @@
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0" xsi:type="MailApp">
+
+  <Id>5c1836e8-456c-4cc3-ae61-61273eba984a</Id>
+  <Version>1.1.0.0</Version>
+  <ProviderName>YAS Beauty</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="YAS Beauty Signature" />
+  <Description DefaultValue="Adauga automat semnatura YAS Beauty la mesajele noi." />
+  <IconUrl DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/icon-128.png" />
+  <SupportUrl DefaultValue="https://yasbeauty.com" />
+
+  <Hosts>
+    <Host Name="Mailbox" />
+  </Hosts>
+
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.10" />
+    </Sets>
+  </Requirements>
+
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/commands.html" />
+        <RequestedHeight>250</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+
+  <Permissions>ReadWriteItem</Permissions>
+
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" />
+  </Rule>
+
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.10">
+          <bt:Set Name="Mailbox" />
+        </bt:Sets>
+      </Requirements>
+
+      <Hosts>
+        <Host xsi:type="MailHost">
+
+          <Runtimes>
+            <Runtime resid="WebViewRuntime.Url">
+              <Override type="javascript" resid="JSRuntime.Url" />
+            </Runtime>
+          </Runtimes>
+
+          <DesktopFormFactor>
+            <FunctionFile resid="Commands.Url" />
+
+            <ExtensionPoint xsi:type="LaunchEvent">
+              <LaunchEvents>
+                <LaunchEvent Type="OnNewMessageCompose" FunctionName="insertSignature" />
+                <LaunchEvent Type="OnMessageFromChanged" FunctionName="onFromChanged" />
+              </LaunchEvents>
+              <SourceLocation resid="WebViewRuntime.Url" />
+            </ExtensionPoint>
+          </DesktopFormFactor>
+
+        </Host>
+      </Hosts>
+
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16" DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/icon-16.png" />
+          <bt:Image id="Icon.32" DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/icon-32.png" />
+          <bt:Image id="Icon.80" DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/icon-80.png" />
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Commands.Url" DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/commands.html" />
+          <bt:Url id="WebViewRuntime.Url" DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/commands.html" />
+          <bt:Url id="JSRuntime.Url" DefaultValue="https://iugacatalin11.github.io/yas-email-assets/addin/commands.js" />
+        </bt:Urls>
+      </Resources>
+
+    </VersionOverrides>
+  </VersionOverrides>
+</OfficeApp>

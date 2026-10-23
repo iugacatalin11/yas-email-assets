@@ -1,5 +1,10 @@
-// YAS Beauty — Outlook signature add-in (event-based activation)
-// Ruleaza la "New message compose" si insereaza semnatura cu datele utilizatorului.
+// YAS Beauty — Outlook signature add-in (event-based activation)  v1.1
+// Ruleaza la:
+//   - OnNewMessageCompose   -> insereaza semnatura cu datele utilizatorului
+//   - OnMessageFromChanged  -> re-insereaza semnatura cand se schimba expeditorul
+//                              (ex. From = Office@ / Contact@). Fara asta, Outlook
+//                              (mai ales pe Mac) inlocuieste semnatura cu cea
+//                              implicita a contului partajat ("Get Outlook for Mac").
 
 var ASSETS = "https://iugacatalin11.github.io/yas-email-assets";
 var USERS_URL = ASSETS + "/addin/users.json";
@@ -60,7 +65,43 @@ function fetchUsers(timeoutMs) {
   });
 }
 
-function insertSignature(event) {
+// Adresa curenta din campul From (compose). Daca API-ul nu e disponibil
+// sau nu raspunde in 3s, intoarcem null si folosim adresa din profil.
+function getFromAddress(timeoutMs) {
+  return new Promise(function (resolve) {
+    var done = false;
+    var finish = function (val) { if (!done) { done = true; resolve(val); } };
+    setTimeout(function () { finish(null); }, timeoutMs);
+    try {
+      var item = Office.context.mailbox.item;
+      if (item && item.from && item.from.getAsync) {
+        item.from.getAsync(function (res) {
+          if (res && res.status === Office.AsyncResultStatus.Succeeded && res.value) {
+            finish({
+              email: (res.value.emailAddress || "").toLowerCase(),
+              displayName: res.value.displayName || ""
+            });
+          } else {
+            finish(null);
+          }
+        });
+      } else {
+        finish(null);
+      }
+    } catch (e) {
+      finish(null);
+    }
+  });
+}
+
+// Logica comuna: construieste si seteaza semnatura.
+//   - numele + functia vin din users.json dupa adresa PERSOANEI (profilul Office),
+//     ca sa apara cine scrie efectiv, chiar daca trimite ca Office@/Contact@;
+//   - adresa afisata in semnatura e cea din From (cutia partajata, daca e cazul).
+//   Exceptie: daca in users.json exista o intrare pentru adresa partajata
+//   (ex. "contact@yasbeauty.com": { "name": "Echipa YAS Beauty", "title": "..." }),
+//   atunci se foloseste acel nume in locul numelui persoanei.
+function applySignature(event, useFromField) {
   var completed = false;
   var finish = function () {
     if (completed) { return; }
@@ -69,17 +110,26 @@ function insertSignature(event) {
   };
   try {
     var profile = (Office.context && Office.context.mailbox && Office.context.mailbox.userProfile) || {};
-    var email = (profile.emailAddress || "").toLowerCase();
+    var selfEmail = (profile.emailAddress || "").toLowerCase();
     var displayName = profile.displayName || "";
 
-    fetchUsers(4000).then(function (users) {
+    var fromPromise = useFromField ? getFromAddress(3000) : Promise.resolve(null);
+
+    Promise.all([fetchUsers(4000), fromPromise]).then(function (results) {
       try {
-        var user = users && users[email];
-        var name = (user && user.name) || displayName;
-        var title = (user && user.title) || "";
-        var pd = (user && user.phoneDisplay) || SHARED.phoneDisplay;
-        var pt = (user && user.phoneTel) || SHARED.phoneTel;
-        var html = buildSignature(name, title, pd, pt, email);
+        var users = results[0];
+        var from = results[1];
+        var fromEmail = (from && from.email) || selfEmail;
+
+        var self = users && users[selfEmail];
+        var shared = (fromEmail !== selfEmail) && users && users[fromEmail];
+
+        var name = (shared && shared.name) || (self && self.name) || displayName;
+        var title = (shared && shared.name) ? (shared.title || "") : ((self && self.title) || "");
+        var pd = (shared && shared.phoneDisplay) || (self && self.phoneDisplay) || SHARED.phoneDisplay;
+        var pt = (shared && shared.phoneTel) || (self && self.phoneTel) || SHARED.phoneTel;
+
+        var html = buildSignature(name, title, pd, pt, fromEmail);
         Office.context.mailbox.item.body.setSignatureAsync(
           html,
           { coercionType: Office.CoercionType.Html },
@@ -96,7 +146,18 @@ function insertSignature(event) {
   }
 }
 
-// Inregistrarea handler-ului si handshake-ul obligatoriu cu office.js.
+// OnNewMessageCompose — mesaj nou (From = contul principal, de regula)
+function insertSignature(event) {
+  applySignature(event, true);
+}
+
+// OnMessageFromChanged — utilizatorul a schimbat expeditorul (ex. pe Office@/Contact@).
+// Outlook tocmai a inlocuit semnatura cu cea a contului nou; o punem pe a noastra la loc.
+function onFromChanged(event) {
+  applySignature(event, true);
+}
+
+// Inregistrarea handler-elor si handshake-ul obligatoriu cu office.js.
 // Office.initialize / Office.onReady TREBUIE apelate sincron la incarcarea
 // scriptului, altfel office.js arunca "Office.js has not fully loaded" si
 // handler-ul nu mai e apelat niciodata.
@@ -104,6 +165,7 @@ function registerHandler() {
   try {
     if (typeof Office !== "undefined" && Office.actions && Office.actions.associate) {
       Office.actions.associate("insertSignature", insertSignature);
+      Office.actions.associate("onFromChanged", onFromChanged);
       return true;
     }
   } catch (e) { /* nimic */ }
